@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace JakubBoucek\Tar\Parser;
 
+$referencedStreamWrapperFile = __DIR__ . '/../ReferencedStreamWrapper.php';
+if (file_exists($referencedStreamWrapperFile)) {
+    require_once $referencedStreamWrapperFile;
+}
+
 use Closure;
 use Exception;
 use JakubBoucek\Tar\Exception\FileContentClosedException;
@@ -106,6 +111,10 @@ class LazyContent implements LightStreamInterface
         $this->stream = $this->contentClosure = null;
     }
 
+    public function asResource()
+    {
+        return ($this->contentClosure)(streamProtocol: 'referenced');
+    }
 
     /**
      * @return resource

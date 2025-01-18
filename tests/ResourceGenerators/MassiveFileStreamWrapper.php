@@ -7,6 +7,8 @@ use JakubBoucek\Tar\Exception\RuntimeException;
 
 class MassiveFileStreamWrapper
 {
+    const MAX_USTAR_SIZE = 8589934591; // 8GB - 1
+
     public $context;
     protected Generator $generator;
     protected string $buffer = '';
