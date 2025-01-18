@@ -113,7 +113,13 @@ class LazyContent implements LightStreamInterface
 
     public function asResource()
     {
-        return ($this->contentClosure)(null, 'referenced');
+        if (!isset($this->stream)) {
+            $stream = ($this->contentClosure)(null, 'referenced');
+            $this->stream = $stream;
+            $this->contentClosure = null;
+        }
+
+        return $this->stream;
     }
 
     /**

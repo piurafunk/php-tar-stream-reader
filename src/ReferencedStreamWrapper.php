@@ -59,6 +59,14 @@ class ReferencedStreamWrapper
     {
         return $this->position;
     }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function stream_stat(): array
+    {
+        return ['size' => $this->size];
+    }
 }
 
 stream_wrapper_register('referenced', ReferencedStreamWrapper::class)

@@ -159,6 +159,7 @@ class StreamReader implements IteratorAggregate
                         'Invalid TAR archive format: Unexpected end of file, expected PAX header data'
                     );
                 }
+                fseek($this->stream, 512 - ($paxHeader->getSize() % 512), SEEK_CUR); // Skip null byte padding
                 $paxHeader->harvestPaxData($paxData);
                 $header = $this->readHeader();
                 break;
