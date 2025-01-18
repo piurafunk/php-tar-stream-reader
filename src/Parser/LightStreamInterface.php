@@ -18,4 +18,9 @@ interface LightStreamInterface extends StreamInterface
      * @param resource|null $context Stream context (e.g. from `stream_context_create()`)
      */
     public function toFile(string $file, $context = null): void;
+
+    /**
+     * @return resource
+     */
+    public function asResource();
 }
