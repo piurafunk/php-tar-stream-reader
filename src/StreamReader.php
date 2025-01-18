@@ -48,6 +48,10 @@ class StreamReader implements IteratorAggregate
 
             $blockStart = ftell($this->stream);
 
+            if ($blockStart === false) {
+                throw new RuntimeException('Unable to get current position of stream');
+            }
+
             if (!$header->isValid()) {
                 throw new InvalidArchiveFormatException(
                     sprintf(
@@ -120,11 +124,6 @@ class StreamReader implements IteratorAggregate
                 }
             }
         }
-    }
-
-    public function setStreamProtocol(?string $streamProtocol): void
-    {
-        $this->streamProtocol = $streamProtocol;
     }
 
     private function readHeader(): Header
