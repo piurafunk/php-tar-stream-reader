@@ -12,7 +12,6 @@ use JakubBoucek\Tar\Exception\InvalidArgumentException;
 use JakubBoucek\Tar\Exception\RuntimeException;
 use JakubBoucek\Tar\Parser\Header;
 use JakubBoucek\Tar\Parser\LazyContent;
-use JakubBoucek\Tar\Parser\Usage;
 
 /**
  * @implements IteratorAggregate<File>
@@ -61,8 +60,6 @@ class StreamReader implements IteratorAggregate
                 );
             }
 
-            $usage = new Usage();
-
             $contentSize = $header->getSize();
             $contentPadding = ($contentSize % 512) === 0 ? 0 : 512 - ($contentSize % 512);
 
@@ -71,23 +68,66 @@ class StreamReader implements IteratorAggregate
              * @param resource|null $target Resource to external stream to fill it by file content
              * @return resource
              */
-            $contentClosure = function ($target = null, ?string $streamProtocol = null) use ($usage, $contentSize, $contentPadding, $blockStart) {
-                $usage->use();
+            $contentClosure = function ($target = null, ?string $streamProtocol = null) use ($contentSize, $contentPadding, $blockStart) {
 
                 $useTarget = is_resource($target) && get_resource_type($target);
                 if ($useTarget) {
                     $stream = $target;
+                    $this->copyStream($stream, $contentSize, $blockStart, $contentPadding);
+                } elseif ($streamProtocol) {
+                    $stream = fopen("{$streamProtocol}://", 'r', context: stream_context_create([
+                        $streamProtocol => [
+                            'stream' => $this->stream,
+                            'size' => $contentSize,
+                        ],
+                    ]));
+
+                    if (!$stream) {
+                        throw new RuntimeException('Unable to create temporary stream.');
+                    }
                 } else {
-                    $stream = $this->createStream($blockStart, $contentSize, $streamProtocol);
+                    $stream = fopen('php://temp', 'wb+');
+
+                    if (!$stream) {
+                        throw new RuntimeException('Unable to create temporary stream.');
+                    }
+
+                    $this->copyStream($stream, $contentSize, $blockStart, $contentPadding);
                 }
 
-                if (!$contentPadding) {
-                    return $stream;
+                return $stream;
+            };
+
+            $content = new LazyContent($contentClosure);
+            yield new File($header, $content);
+
+            $blockCurrent = ftell($this->stream);
+            if ($blockCurrent === false) {
+                throw new RuntimeException('Unable to get current position of stream');
+            }
+
+            // Ensure we've read past the content
+            if ($blockCurrent < $blockStart + $contentSize) {
+                $bytes = fseek($this->stream, $blockStart + $contentSize);
+                if ($bytes === -1) {
+                    throw new InvalidArchiveFormatException(
+                        sprintf(
+                            'Invalid TAR archive format: Unexpected end of file at position: %s, expected %d bytes of content',
+                            $blockStart,
+                            $contentSize,
+                        )
+                    );
                 }
 
-                // Skip padding
-                $bytes = fseek($this->stream, $contentPadding, SEEK_CUR);
+                $blockCurrent = ftell($this->stream);
+                if ($blockCurrent === false) {
+                    throw new RuntimeException('Unable to get current position of stream');
+                }
+            }
 
+            // Ensure we've read past the padding
+            if ($blockCurrent < $blockStart + $contentSize + $contentPadding) {
+                $bytes = fseek($this->stream, $blockStart + $contentSize + $contentPadding);
                 if ($bytes === -1) {
                     throw new InvalidArchiveFormatException(
                         sprintf(
@@ -97,32 +137,10 @@ class StreamReader implements IteratorAggregate
                         )
                     );
                 }
-
-                return $stream;
-            };
-
-            $content = new LazyContent($contentClosure);
-            yield new File($header, $content);
-
-            // Seek after unused content
-            if (!$usage->used()) {
-                $usage->use();
-                $content->close();
-                if ($contentSize) {
-                    // Skip unused content
-                    $bytes = fseek($this->stream, $contentSize + $contentPadding, SEEK_CUR);
-
-                    if ($bytes === -1) {
-                        throw new InvalidArchiveFormatException(
-                            sprintf(
-                                'Invalid TAR archive format: Unexpected end of file at position: %s, expected %d bytes of content and block padding',
-                                $blockStart,
-                                $contentSize + $contentPadding,
-                            )
-                        );
-                    }
-                }
             }
+
+            // Ensure the stream is closed
+            $content->close();
         }
     }
 
@@ -178,43 +196,41 @@ class StreamReader implements IteratorAggregate
     }
 
     /**
-     * @return resource
+     * @param resource $stream
+     * @param int $contentSize
+     * @param int $blockStart
+     * @param int $contentPadding
+     * @return void
      */
-    protected function createStream(int $blockStart, int $contentSize, ?string $streamProtocol = null)
+    protected function copyStream($stream, int $contentSize, int $blockStart, int $contentPadding): void
     {
-        if ($streamProtocol) {
-            $stream = fopen("{$streamProtocol}://", 'r', context: stream_context_create([
-                $streamProtocol => [
-                    'stream' => $this->stream,
-                    'size' => $contentSize,
-                ],
-            ]));
+        fseek($stream, 0);
+        $bytes = stream_copy_to_stream($this->stream, $stream, $contentSize);
 
-            if(!$stream) {
-                throw new RuntimeException('Unable to create temporary stream.');
-            }
-        } else {
-            $stream = fopen('php://temp', 'wb+');
+        if ($bytes !== $contentSize) {
+            throw new InvalidArchiveFormatException(
+                sprintf(
+                    'Invalid TAR archive format: Unexpected end of file at position: %s, expected %d bytes, only %d bytes read',
+                    $blockStart,
+                    $contentSize,
+                    ($bytes ?: 0)
+                )
+            );
+        }
 
-            if(!$stream) {
-                throw new RuntimeException('Unable to create temporary stream.');
-            }
+        if ($contentPadding) {
+            // Skip padding
+            $bytes = fseek($this->stream, $contentPadding, SEEK_CUR);
 
-            fseek($stream, 0);
-            $bytes = stream_copy_to_stream($this->stream, $stream, $contentSize);
-
-            if ($bytes !== $contentSize) {
+            if ($bytes === -1) {
                 throw new InvalidArchiveFormatException(
                     sprintf(
-                        'Invalid TAR archive format: Unexpected end of file at position: %s, expected %d bytes, only %d bytes read',
+                        'Invalid TAR archive format: Unexpected end of file at position: %s, expected %d bytes of block padding',
                         $blockStart,
-                        $contentSize,
-                        ($bytes ?: 0)
+                        $contentPadding,
                     )
                 );
             }
         }
-
-        return $stream;
     }
 }
