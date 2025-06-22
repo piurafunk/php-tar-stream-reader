@@ -39,7 +39,10 @@ class ReferencedStreamWrapper
     public function stream_read(int $count): string|false
     {
         $min = min($count, $this->size - $this->position);
-        assert($min > 0);
+        assert($min >= 0);
+        if ($min == 0) {
+            return '';
+        }
         $data = fread($this->stream, $min);
 
         if ($data === false) {
