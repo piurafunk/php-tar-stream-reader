@@ -108,7 +108,7 @@ class StreamReader implements IteratorAggregate
 
             // Ensure we've read past the content
             if ($blockCurrent < $blockStart + $contentSize) {
-                $bytes = fseek($this->stream, $blockStart + $contentSize);
+                $bytes = fseek($this->stream, $blockStart + $contentSize - $blockCurrent, SEEK_CUR);
                 if ($bytes === -1) {
                     throw new InvalidArchiveFormatException(
                         sprintf(
@@ -127,7 +127,7 @@ class StreamReader implements IteratorAggregate
 
             // Ensure we've read past the padding
             if ($blockCurrent < $blockStart + $contentSize + $contentPadding) {
-                $bytes = fseek($this->stream, $blockStart + $contentSize + $contentPadding);
+                $bytes = fseek($this->stream, $blockStart + $contentSize + $contentPadding - $blockCurrent, SEEK_CUR);
                 if ($bytes === -1) {
                     throw new InvalidArchiveFormatException(
                         sprintf(
