@@ -76,6 +76,10 @@ class Header
 
     public function getName(): string
     {
+        if (array_key_exists('name', $this->pax)) {
+            return $this->pax['name'];
+        }
+
         $str = substr($this->content, 0, 100);
         return rtrim($str, "\0");
     }
