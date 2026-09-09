@@ -36,7 +36,7 @@ use JakubBoucek\Tar\Exception\InvalidArgumentException;
 class Header
 {
     private string $content;
-    /** @var array{size?: int, name?: string} */
+    /** @var array{size?: int, path?: string} */
     private array $pax = [];
 
     public function __construct(string $content)
@@ -67,7 +67,7 @@ class Header
 
             match ($key) {
                 'size' => $this->pax['size'] = (int)$value,
-                'name' => $this->pax['name'] = $value,
+                'path' => $this->pax['path'] = $value,
                 default => null,
             };
         }
@@ -80,8 +80,8 @@ class Header
 
     public function getName(): string
     {
-        if (array_key_exists('name', $this->pax)) {
-            return $this->pax['name'];
+        if (array_key_exists('path', $this->pax)) {
+            return $this->pax['path'];
         }
 
         $str = substr($this->content, 0, 100);

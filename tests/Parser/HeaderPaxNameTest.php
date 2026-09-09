@@ -58,7 +58,7 @@ class HeaderPaxNameTest extends TestCase
      */
     private function buildTar(string $name): string
     {
-        $paxData = $this->buildPaxRecord('name', $name);
+        $paxData = $this->buildPaxRecord('path', $name);
         $paxDataBlock = str_pad($paxData, (intdiv(strlen($paxData), 512) + 1) * 512, "\0", STR_PAD_RIGHT);
 
         $paxHeader = $this->buildTarHeader('././@PaxHeader', strlen($paxData), 'x');
